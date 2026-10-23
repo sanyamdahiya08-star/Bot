@@ -1,21 +1,18 @@
-# Telegram Payment Approval Bot
-# Simple bot: notifies admin when user clicks "I Have Paid", admin clicks Approve → user gets invite link
-
-# Requirements:
-# pip install python-telegram-bot==21.6
+# Telegram Payment Approval Bot (Render-compatible)
+# Fixed for event loop issues on Render / Python 3.10+
 
 import os
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ============ CONFIG ============
-BOT_TOKEN = "8914148510:AAH85SPPwu3xzKhCXzYi31BZgOhjHs_Hmkw"          # Get from @BotFather
-ADMIN_CHAT_ID = 8694371502                 # Your Telegram user ID (get from @userinfobot)
-INVITE_LINK = "https://t.me/+5ZCeUtZYuKlkNDZl"  # One-time or permanent invite
+BOT_TOKEN = "8914148510:AAH85SPPwu3xzKhCXzYi31BZgOhjHs_Hmkw"
+ADMIN_CHAT_ID = 8694371502  
+INVITE_LINK = "https://t.me/+5ZCeUtZYuKlkNDZl"
 PRICE = "199"
 # ================================
 
-# In-memory store (use a database later if needed)
 pending_payments = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -25,7 +22,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def new_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Call this from your website later, or use /new for testing"""
     user_info = update.message.text.replace("/new", "").strip() or "Unknown user"
     payment_id = str(len(pending_payments) + 1)
 
@@ -59,13 +55,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action, payment_id = query.data.split("_", 1)
 
     if action == "approve":
-        # Send invite link to the user (in real version, update the web page status)
         await query.edit_message_text(
-            text=f"✅ *Approved* — Payment #{payment_id}\n\nInvite link sent to user.",
+            text=f"✅ *Approved* — Payment #{payment_id}\n\nInvite link: {INVITE_LINK}",
             parse_mode="Markdown",
         )
-        # In production: mark session as approved so the webpage can poll and show the link
-        print(f"APPROVED {payment_id} → Send this link to user: {INVITE_LINK}")
+        print(f"APPROVED {payment_id} → {INVITE_LINK}")
         pending_payments[payment_id]["status"] = "approved"
 
     elif action == "reject":
@@ -75,13 +69,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         pending_payments[payment_id]["status"] = "rejected"
 
-def main():
+async def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("new", new_payment))  # For testing: /new UserName
+    app.add_handler(CommandHandler("new", new_payment))
     app.add_handler(CallbackQueryHandler(button_handler))
+
     print("Bot is running...")
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    # Keep the bot running
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
